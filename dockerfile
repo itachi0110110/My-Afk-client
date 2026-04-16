@@ -1,7 +1,20 @@
-FROM node:18
-WORKDIR /app
+# ১. নোড জেএস এর লেটেস্ট ভার্সন ব্যবহার করা হচ্ছে
+FROM node:18-slim
+
+# ২. অ্যাপ ডিরেক্টরি তৈরি
+WORKDIR /usr/src/app
+
+# ৩. ডিপেন্ডেন্সি ফাইল কপি করা
 COPY package*.json ./
-RUN npm install
+
+# ৪. লাইব্রেরি ইন্সটল করা (অপ্রয়োজনীয় ফাইল বাদ দিয়ে)
+RUN npm install --production
+
+# ৫. সব কোড কপি করা
 COPY . .
+
+# ৬. ওয়েব ড্যাশবোর্ডের জন্য পোর্ট ওপেন করা
 EXPOSE 8080
+
+# ৭. অ্যাপটি চালু করার কমান্ড
 CMD ["node", "index.js"]
