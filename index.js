@@ -1,63 +1,68 @@
 const mineflayer = require('mineflayer');
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const express = require('express');
+const fs = require('fs');
+const bodyParser = require('body-parser');
 const app = express();
-const port = process.env.PORT || 8080;
 
-// --- ১. ওয়েব ড্যাশবোর্ড সেটআপ ---
-app.get('/', (req, res) => {
-    res.send(`
-        <html>
-            <body style="background:#111; color:#0f0; font-family:monospace; padding:20px;">
-                <h1>🎮 Bot Dashboard</h1>
-                <div id="logs" style="border:1px solid #333; padding:10px; height:300px; overflow-y:scroll;">
-                    <p>> Bot is online and monitoring...</p>
-                </div>
-                <script>
-                    setTimeout(() => { location.reload(); }, 30000); // অটো রিফ্রেশ
-                </script>
-            </body>
-        </html>
-    `);
-});
-app.listen(port, () => console.log(`Dashboard running on port ${port}`));
+app.use(bodyParser.urlencoded({ extended: true }));
+const CONFIG_FILE = './config.json';
 
-// --- ২. ডিসকর্ড বট সেটআপ ---
-const dcBot = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
-const DISCORD_TOKEN = 'YOUR_DISCORD_BOT_TOKEN';
-const CHANNEL_ID = 'YOUR_CHANNEL_ID';
-
-dcBot.login(DISCORD_TOKEN);
-
-// --- ৩. মাইনক্রাফট বট সেটআপ ---
-const bot = mineflayer.createBot({
-    host: 'SERVER_IP', 
+// ১. কনফিগ ফাইল পড়া বা তৈরি করা
+let config = {
+    host: '://example.com',
     port: 25565,
-    username: 'ConsoleBot',
-    version: '1.20.1'
-});
+    username: 'MyBot',
+    version: '1.20.1',
+    dcToken: '',
+    dcChannel: ''
+};
 
-// ডিসকর্ডে লগ পাঠানো
-function sendToDiscord(user, message) {
-    const channel = dcBot.channels.cache.get(CHANNEL_ID);
-    if (channel) {
-        const embed = new EmbedBuilder()
-            .setColor('#00FF00')
-            .setDescription(`**${user}**: ${message}`);
-        channel.send({ embeds: [embed] });
-    }
+if (fs.existsSync(CONFIG_FILE)) {
+    config = JSON.parse(fs.readFileSync(CONFIG_FILE));
 }
 
-bot.on('chat', (username, message) => {
-    if (username === bot.username) return;
-    sendToDiscord(username, message); // গেম চ্যাট ডিসকর্ডে পাঠাবে
+// ২. ওয়েব ড্যাশবোর্ড (সেটিং পরিবর্তনের ফরম)
+app.get('/', (req, res) => {
+    res.send(`
+        <body style="background:#121212; color:white; font-family:sans-serif; padding:40px;">
+            <h2>⚙️ Bot Control Panel</h2>
+            <form action="/save" method="POST" style="display:grid; gap:10px; width:300px;">
+                Server IP: <input name="host" value="${config.host}">
+                Port: <input name="port" value="${config.port}">
+                Bot Name: <input name="username" value="${config.username}">
+                MC Version: <input name="version" value="${config.version}">
+                Discord Token: <input name="dcToken" value="${config.dcToken}" type="password">
+                Channel ID: <input name="dcChannel" value="${config.dcChannel}">
+                <button type="submit" style="padding:10px; background:green; color:white; border:none;">SAVE & RESTART</button>
+            </form>
+            <p>Status: <span style="color:lime;">Running</span></p>
+        </body>
+    `);
 });
 
-// ডিসকর্ড থেকে গেমে মেসেজ পাঠানো
-dcBot.on('messageCreate', (message) => {
-    if (message.author.bot || message.channel.id !== CHANNEL_ID) return;
-    bot.chat(`[Discord] ${message.author.username}: ${message.content}`);
+// ৩. সেটিংস সেভ করার রুট
+app.post('/save', (req, res) => {
+    config = req.body;
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+    res.send('✅ Settings Saved! Restarting bot...');
+    process.exit(1); // বটি রিস্টার্ট হবে নতুন সেটিংস নিয়ে
 });
 
-bot.on('login', () => console.log('✅ MC Bot Connected!'));
-bot.on('error', (err) => console.log('⚠️ Error:', err));
+app.listen(process.env.PORT || 8080);
+
+// ৪. Mineflayer বটের মেইন ফাংশন
+function startBot() {
+    const bot = mineflayer.createBot({
+        host: config.host,
+        port: parseInt(config.port),
+        username: config.username,
+        version: config.version,
+        auth: 'offline'
+    });
+
+    bot.on('login', () => console.log('✔ Bot is in the server!'));
+    bot.on('end', () => setTimeout(startBot, 5000));
+    bot.on('error', (err) => console.log(err));
+}
+
+startBot();
